@@ -8,23 +8,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+// [수정] issue-card에서 정의한 상세한 Issue 타입을 import
+import { Issue } from "@/components/issue-card"
 
-// [수정] 데이터 타입을 정의하고, props로 데이터를 받도록 변경
-export interface IssueData {
-    id: string
-    date: string
-    location: string
-    area: string
-    factor: string
-    hazard: string
-    status: "pending" | "completed"
-}
-
+// [수정] Prop 타입 변경 및 onRowClick 추가
 interface IssueDataTableProps {
-    data: IssueData[]
+    data: Issue[]
+    onRowClick: (issue: Issue) => void
 }
 
-export function IssueDataTable({ data }: IssueDataTableProps) {
+export function IssueDataTable({ data, onRowClick }: IssueDataTableProps) {
     return (
         <Table>
             <TableHeader>
@@ -38,9 +31,13 @@ export function IssueDataTable({ data }: IssueDataTableProps) {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {/* [수정] mockIssues 대신 props.data를 사용 */}
                 {data.map((issue) => (
-                    <TableRow key={issue.id}>
+                    // [수정] 행(Row)에 onClick 이벤트 및 스타일 추가
+                    <TableRow
+                        key={issue.id}
+                        onClick={() => onRowClick(issue)}
+                        className="cursor-pointer hover:bg-muted/50"
+                    >
                         <TableCell>{issue.date}</TableCell>
                         <TableCell>{issue.location}</TableCell>
                         <TableCell>{issue.area}</TableCell>
@@ -50,10 +47,16 @@ export function IssueDataTable({ data }: IssueDataTableProps) {
                             <span
                                 className={`px-2 py-1 rounded-full text-xs font-medium ${issue.status === "pending"
                                         ? "bg-red-100 text-red-800"
-                                        : "bg-green-100 text-green-800"
+                                        : issue.status === "inprogress"
+                                            ? "bg-yellow-100 text-yellow-800"
+                                            : "bg-green-100 text-green-800"
                                     }`}
                             >
-                                {issue.status === "pending" ? "개선 필요" : "개선 완료"}
+                                {issue.status === "pending"
+                                    ? "개선 필요"
+                                    : issue.status === "inprogress"
+                                        ? "개선 중"
+                                        : "개선 완료"}
                             </span>
                         </TableCell>
                     </TableRow>

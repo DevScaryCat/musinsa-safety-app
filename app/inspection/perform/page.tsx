@@ -19,6 +19,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { SearchableSelect } from "@/components/searchable-select"
 import { UserProfileBadge } from "@/components/user-profile-badge"
+import { DatePicker } from "@/components/ui/date-picker"
+
 
 const FACTORS = [
     "조도", "운반차량", "물품", "휴게시설", "지게차", "콘센트",
@@ -30,18 +32,20 @@ const HAZARD_TYPES = [
     "근골격계질환", "넘어짐", "무너짐", "베임",
 ]
 
-interface MockIssue {
+interface MockIssuePerform {
     id: string
-    location: string
+    center: string
+    floor: string
     area: string
     factor: string
     plan: string
     date: string
 }
-const MOCK_EXISTING_ISSUES: MockIssue[] = [
+const MOCK_EXISTING_ISSUES: MockIssuePerform[] = [
     {
         id: "existing-1",
-        location: "1C A 2F",
+        center: "여수1",
+        floor: "2F",
         area: "도크 전반",
         factor: "물품",
         plan: "방화셔터, 방화문 범위 내 적치 금지",
@@ -49,7 +53,8 @@ const MOCK_EXISTING_ISSUES: MockIssue[] = [
     },
     {
         id: "existing-2",
-        location: "1C A 2F",
+        center: "여수1",
+        floor: "2F",
         area: "도크 전반",
         factor: "물품",
         plan: "소화전 주변 물품 적치 금지",
@@ -57,7 +62,8 @@ const MOCK_EXISTING_ISSUES: MockIssue[] = [
     },
     {
         id: "existing-3",
-        location: "1C B 3F",
+        center: "여수1",
+        floor: "3F",
         area: "RFID 라인",
         factor: "지게차",
         plan: "펜스 구분 구획 및 통로 라인 테이핑",
@@ -65,36 +71,70 @@ const MOCK_EXISTING_ISSUES: MockIssue[] = [
     },
 ]
 
+
+
 function PerformForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const location = searchParams.get("location") || "알 수 없는 위치"
+    const center = searchParams.get("center") || "알 수 없는 센터"
+    const floor = searchParams.get("floor") || "알 수 없는 층"
     const area = searchParams.get("area") || "알 수 없는 구역"
-    const [photo, setPhoto] = useState<File | undefined>()
-    const [preview, setPreview] = useState<string | null>(null)
+
+    const [photos, setPhotos] = useState<File[]>([])
+    const [previews, setPreviews] = useState<string[]>([])
     const [factor, setFactor] = useState("")
     const [hazardType, setHazardType] = useState("")
     const [plan, setPlan] = useState("")
     const [isSubmitted, setIsSubmitted] = useState(false)
+    const [inspectionDate, setInspectionDate] = useState<Date | undefined>(new Date())
+    const [standard, setStandard] = useState<string | null>(null)
 
-    const [existingIssues, setExistingIssues] = useState<MockIssue[]>([])
+    const [existingIssues, setExistingIssues] = useState<MockIssuePerform[]>([])
     const [isDuplicateAlertOpen, setIsDuplicateAlertOpen] = useState(false)
 
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0]
-            setPhoto(file)
-            setPreview(URL.createObjectURL(file))
+        if (e.target.files) {
+            const filesArray = Array.from(e.target.files);
+            setPhotos(prev => [...prev, ...filesArray]);
+
+            const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+            setPreviews(prev => [...prev, ...newPreviews]);
         }
-    }
+
+        e.target.value = '';
+    };
+
+
+    const handleRemovePhoto = (indexToRemove: number) => {
+        setPhotos(prev => prev.filter((_, index) => index !== indexToRemove));
+        setPreviews(prev => {
+            const urlToRemove = prev[indexToRemove];
+            if (urlToRemove) {
+                URL.revokeObjectURL(urlToRemove);
+            }
+            return prev.filter((_, index) => index !== indexToRemove);
+        });
+    };
+
 
     const handleFactorChange = (selectedFactor: string) => {
         setFactor(selectedFactor)
 
+
+        if (selectedFactor === "물품") {
+            setStandard("물품 적재 기준: 통로 확보, 소화전/비상구 주변 적치 금지, 랩핑 상태 확인")
+        } else if (selectedFactor === "지게차") {
+            setStandard("지게차 점검 기준: 작업 전 점검표 작성, 안전벨트 착용, 운전자 외 탑승 금지")
+        } else {
+            setStandard(null);
+        }
+
         if (selectedFactor) {
             const duplicates = MOCK_EXISTING_ISSUES.filter(
                 (issue) =>
-                    issue.location === location &&
+                    issue.center === center &&
+                    issue.floor === floor &&
                     issue.area === area &&
                     issue.factor === selectedFactor,
             )
@@ -107,24 +147,30 @@ function PerformForm() {
     }
 
     const handleSubmit = () => {
+
+
         console.log("제출 데이터:", {
-            location,
+            center,
+            floor,
             area,
-            photo,
+            photos,
             factor,
             hazardType,
             plan,
+            inspectionDate: inspectionDate?.toISOString().split('T')[0],
         })
         setIsSubmitted(true)
     }
 
     const handleReset = () => {
         setIsSubmitted(false)
-        setPhoto(undefined)
-        setPreview(null)
+        setPhotos([])
+        setPreviews([])
         setFactor("")
         setHazardType("")
         setPlan("")
+        setInspectionDate(new Date())
+        setStandard(null)
     }
 
     const handleComplete = () => {
@@ -134,7 +180,8 @@ function PerformForm() {
     if (isSubmitted) {
         return (
             <div className="p-4 max-w-2xl mx-auto space-y-4">
-                <div className="flex justify-end">
+                <div className="flex justify-between items-center mb-4">
+                    <h1 className="text-2xl font-bold">제출 완료</h1>
                     <UserProfileBadge roleName="여수 1 관리자" />
                 </div>
                 <Alert variant="default" className="border-green-500">
@@ -143,7 +190,7 @@ function PerformForm() {
                         성공적으로 제출되었습니다
                     </AlertTitle>
                     <AlertDescription>
-                        {location} - {area} 구역의 점검 사항이 등록되었습니다.
+                        {center} - {floor} - {area} 구역 ({inspectionDate?.toLocaleDateString()}) 점검 사항 등록 완료.
                     </AlertDescription>
                 </Alert>
                 <div className="grid grid-cols-2 gap-4">
@@ -177,7 +224,7 @@ function PerformForm() {
                             <div key={issue.id} className="border p-3 rounded-md bg-gray-50">
                                 <p className="font-semibold">{issue.plan}</p>
                                 <p className="text-sm text-muted-foreground mt-1">
-                                    (등록일: {issue.date})
+                                    ({issue.center}-{issue.floor}-{issue.area} / 등록일: {issue.date})
                                 </p>
                             </div>
                         ))}
@@ -190,48 +237,77 @@ function PerformForm() {
                 </DialogContent>
             </Dialog>
 
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-2xl font-bold">위험 요인 등록</h1>
                 <UserProfileBadge roleName="여수 1 관리자" />
             </div>
-            <div className="text-center">
-                <h1 className="text-2xl font-bold">위험 요인 등록</h1>
+
+            <div className="text-center -mt-4 mb-4">
                 <h2 className="text-lg text-muted-foreground">
-                    {location} - {area}
+                    {center} - {floor} - {area}
                 </h2>
             </div>
+
+            {/* Date Picker */}
+            <div className="grid gap-2">
+                <Label htmlFor="inspection-date">점검 날짜</Label>
+                {/* Needs a DatePicker component, using shadcn/ui example structure */}
+                {/* Assuming you have created/installed components/ui/date-picker.tsx */}
+                {/* <DatePicker date={inspectionDate} onDateChange={setInspectionDate} /> */}
+                {/* Simple input for now if DatePicker is not ready */}
+                <Input
+                    type="date"
+                    value={inspectionDate ? inspectionDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => setInspectionDate(e.target.value ? new Date(e.target.value) : undefined)}
+                />
+            </div>
+
+
             <div className="space-y-4">
-                {/* 1. 사진 업로드 */}
+                {/* 1. Multiple Photo Upload */}
                 <div className="grid gap-2">
-                    <Label htmlFor="photo">사진 첨부</Label>
+                    <Label htmlFor="photo">사진 첨부 (여러 장 가능)</Label>
                     <Input
                         id="photo"
                         type="file"
                         accept="image/*"
                         capture="environment"
+                        multiple
                         className="hidden"
                         onChange={handleFileChange}
                     />
-                    <Label
-                        htmlFor="photo"
-                        className="cursor-pointer border-2 border-dashed border-gray-300 rounded-md h-64 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50"
-                    >
-                        {preview ? (
-                            <Image
-                                src={preview}
-                                alt="미리보기"
-                                width={250}
-                                height={250}
-                                className="object-contain h-full w-full"
-                            />
-                        ) : (
-                            <>
-                                <Camera className="w-12 h-12 mb-2" />
-                                <span>터치하여 사진 촬영 또는 업로드</span>
-                            </>
-                        )}
-                    </Label>
+                    {/* Photo Previews and Add Button */}
+                    <div className="flex flex-wrap gap-2 items-center">
+                        {previews.map((previewUrl, index) => (
+                            <div key={index} className="relative w-24 h-24 border rounded">
+                                <Image
+                                    src={previewUrl}
+                                    alt={`미리보기 ${index + 1}`}
+                                    fill
+                                    sizes="6rem"
+                                    className="object-cover rounded"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleRemovePhoto(index)}
+                                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs leading-none -mt-1 -mr-1 hover:bg-red-700"
+                                    aria-label="Remove image"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                        ))}
+                        <Label
+                            htmlFor="photo"
+                            className="cursor-pointer border-2 border-dashed border-gray-300 rounded-md w-24 h-24 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50"
+                        >
+                            <Camera className="w-8 h-8 mb-1" />
+                            <span className="text-xs">사진 추가</span>
+                        </Label>
+                    </div>
                 </div>
-                {/* 2. 요인 선택 */}
+
+                {/* 2. Factor Selection */}
                 <div className="grid gap-2">
                     <Label htmlFor="factor">요인</Label>
                     <SearchableSelect
@@ -241,7 +317,20 @@ function PerformForm() {
                         items={FACTORS}
                     />
                 </div>
-                {/* 3. 재해 유형 선택 */}
+
+                {/* Standard Display Area */}
+                {standard && (
+                    <Alert variant="default">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>점검 기준</AlertTitle>
+                        <AlertDescription>
+                            {standard}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+
+                {/* 3. Hazard Type Selection */}
                 <div className="grid gap-2">
                     <Label htmlFor="hazardType">재해 유형</Label>
                     <SearchableSelect
@@ -251,24 +340,26 @@ function PerformForm() {
                         items={HAZARD_TYPES}
                     />
                 </div>
-                {/* 4. 개선 방안 */}
+
+                {/* 4. Improvement Plan */}
                 <div className="grid gap-2">
-                    <Label htmlFor="plan">개선 방안</Label>
+                    <Label htmlFor="plan">개선 방안 (현장 조치 내용)</Label>
                     <Textarea
                         id="plan"
                         placeholder="예: 통로 라인 테이핑, 경고 표지 부착 관리"
                         rows={5}
                         value={plan}
-                        // [수정] e.targe -> e.target 오타 수정
                         onChange={(e) => setPlan(e.target.value)}
                     />
                 </div>
-                {/* 5. 제출 버튼 */}
+
+                {/* 5. Submit Button */}
                 <Button
                     onClick={handleSubmit}
                     className="w-full"
                     size="lg"
-                    disabled={!factor || !hazardType || !plan || !photo}
+
+                    disabled={!factor || !hazardType || !plan || photos.length === 0 || !inspectionDate}
                 >
                     제출하기
                 </Button>

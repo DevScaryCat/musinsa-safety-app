@@ -32,37 +32,41 @@ import {
     FactorChart,
     LocationChart,
 } from "@/components/dashboard-charts"
-import { IssueDataTable, IssueData } from "@/components/dashboard-table"
+import { IssueDataTable } from "@/components/dashboard-table"
+import { Issue } from "@/components/issue-card"
 import { UserProfileBadge } from "@/components/user-profile-badge"
+import { IssueDetailModal } from "@/components/issue-detail-modal"
 
 // ---
-// [수정] 헬퍼 컴포넌트를 메인 컴포넌트 밖으로 분리했습니다.
+// 헬퍼 컴포넌트 (DashboardContent)
 // ---
 interface DashboardContentProps {
     siteName: string
-    issues: IssueData[]
-    onExcelExport: (data: IssueData[], siteName: string) => void
+    issues: Issue[]
+    onExcelExport: (data: Issue[], siteName: string) => void
+    onRowClick: (issue: Issue) => void // [확인] onRowClick prop이 정의되어 있어야 함
 }
 
 function DashboardContent({
     siteName,
     issues,
     onExcelExport,
+    onRowClick, // [확인] prop을 받고 있음
 }: DashboardContentProps) {
-    // TODO: 실제로는 siteName을 기준으로 데이터를 다시 fetch 하거나
-    // 부모에서 받은 전체 issues를 siteName으로 필터링해야 합니다.
-    // UI 데모용: '전체'가 아니면 mock 데이터 필터링 시늉
     const filteredIssues =
         siteName === "전체"
             ? issues
-            : issues.filter((issue) => issue.location.startsWith("1C A")) // '여수1'은 '1C A'만 본다고 가정
+            : issues.filter((issue) => issue.location.startsWith("1C A"))
 
-    // siteName에 따라 KPI 데이터 변경 (데모)
     const kpi = {
         score: siteName === "전체" ? "85점" : "78점",
-        totalIssues: siteName === "전체" ? "216건" : "48건",
-        pendingIssues: siteName === "전체" ? "32건" : "8건",
-        completedIssues: siteName === "전체" ? "184건" : "40건",
+        totalIssues:
+            siteName === "전체"
+                ? `${issues.length}건`
+                : `${filteredIssues.length}건`,
+        pendingIssues: `${issues.filter((i) => i.status === "pending").length}건`,
+        completedIssues: `${issues.filter((i) => i.status === "completed").length
+            }건`,
     }
 
     return (
@@ -74,6 +78,7 @@ function DashboardContent({
 
             {/* 1. 종합 현황 탭 */}
             <TabsContent value="overview" className="space-y-4">
+                {/* ... KPI 카드들 ... */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -125,6 +130,7 @@ function DashboardContent({
                     </Card>
                 </div>
 
+                {/* ... 차트들 ... */}
                 <div className="grid gap-4 md:grid-cols-2">
                     <Card>
                         <CardHeader>
@@ -160,7 +166,7 @@ function DashboardContent({
                         <div>
                             <CardTitle>{siteName} 최근 지적 사항 목록</CardTitle>
                             <CardDescription>
-                                기간 내 모든 지적 사항 목록입니다.
+                                기간 내 모든 지적 사항 목록입니다. (항목 클릭 시 상세 보기)
                             </CardDescription>
                         </div>
                         <Button
@@ -172,7 +178,8 @@ function DashboardContent({
                         </Button>
                     </CardHeader>
                     <CardContent>
-                        <IssueDataTable data={filteredIssues} />
+                        {/* [확인] onRowClick이 IssueDataTable로 전달되고 있어야 함 */}
+                        <IssueDataTable data={filteredIssues} onRowClick={onRowClick} />
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -181,9 +188,15 @@ function DashboardContent({
 }
 
 // ---
-// [수정] 여기가 메인 대시보드 페이지 컴포넌트입니다.
+// 메인 대시보드 페이지 컴포넌트
 // ---
-const mockIssues: IssueData[] = [
+
+const placeholderBefore =
+    'data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="100%" height="100%" fill="%23e2e8f0"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="%2364748b">개선 전 사진</text></svg>'
+const placeholderAfter =
+    'data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="100%" height="100%" fill="%23dcfce7"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="%23166534">개선 후 사진</text></svg>'
+
+const mockIssuesData: Issue[] = [
     {
         id: "1",
         date: "2025-10-27",
@@ -192,6 +205,8 @@ const mockIssues: IssueData[] = [
         factor: "통로",
         hazard: "부딪힘",
         status: "pending",
+        before_image: placeholderBefore,
+        before_comment: "AGV 로봇과 보행자 통로 구분이 없음.",
     },
     {
         id: "2",
@@ -201,6 +216,11 @@ const mockIssues: IssueData[] = [
         factor: "물품",
         hazard: "맞음",
         status: "completed",
+        before_image: placeholderBefore,
+        before_comment: "파렛트 랩핑 불량으로 낙하 위험.",
+        top_manager_plan: "전체 재랩핑 및 적치 상태 확인.",
+        after_image: placeholderAfter,
+        after_comment: "조치 완료.",
     },
     {
         id: "3",
@@ -209,7 +229,10 @@ const mockIssues: IssueData[] = [
         area: "RFID 라인",
         factor: "지게차",
         hazard: "부딪힘",
-        status: "pending",
+        status: "inprogress",
+        before_image: placeholderBefore,
+        before_comment: "지게차 회전 반경 내 근로자 충돌 위험.",
+        top_manager_plan: "펜스 설치 및 바닥 라인 테이핑.",
     },
     {
         id: "4",
@@ -218,7 +241,9 @@ const mockIssues: IssueData[] = [
         area: "컨베이어",
         factor: "컨베이어",
         hazard: "끼임",
-        status: "completed",
+        status: "pending",
+        before_image: placeholderBefore,
+        before_comment: "롤러 구동부 덮개 이탈.",
     },
 ]
 
@@ -228,14 +253,25 @@ export default function DashboardPage() {
         to: new Date(),
     })
 
-    const handleExcelExport = (data: IssueData[], siteName: string) => {
+    const [issues, setIssues] = React.useState(mockIssuesData)
+    const [selectedIssue, setSelectedIssue] = React.useState<Issue | null>(null)
+
+    const handleExcelExport = (data: Issue[], siteName: string) => {
         const formattedData = data.map((issue) => ({
             점검일: issue.date,
             "센터/층수": issue.location,
             "세부 위치": issue.area,
             요인: issue.factor,
             "재해 유형": issue.hazard,
-            "개선 상태": issue.status === "pending" ? "개선 필요" : "개선 완료",
+            "개선 상태":
+                issue.status === "pending"
+                    ? "개선 필요"
+                    : issue.status === "inprogress"
+                        ? "개선 중"
+                        : "개선 완료",
+            "개선 전 내용": issue.before_comment,
+            "개선 방안": issue.top_manager_plan || "",
+            "개선 후 내용": issue.after_comment || "",
         }))
         const ws = XLSX.utils.json_to_sheet(formattedData)
         const wb = XLSX.utils.book_new()
@@ -244,6 +280,23 @@ export default function DashboardPage() {
             wb,
             `${siteName}_순회점검_${format(new Date(), "yyyyMMdd")}.xlsx`,
         )
+    }
+
+    // [확인] 이 핸들러가 정의되어 있어야 함
+    const handleRowClick = (issue: Issue) => {
+        setSelectedIssue(issue)
+    }
+
+    const handleUpdatePlan = (issueId: string, plan: string) => {
+        console.log(`Updating issue ${issueId} with plan: ${plan}`)
+        setIssues((prevIssues) =>
+            prevIssues.map((issue) =>
+                issue.id === issueId
+                    ? { ...issue, status: "inprogress", top_manager_plan: plan }
+                    : issue,
+            ),
+        )
+        setSelectedIssue(null)
     }
 
     return (
@@ -292,7 +345,6 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* [수정] 사업장별 필터 Tabs. space-y-4 제거 */}
                 <Tabs defaultValue="all">
                     <TabsList>
                         <TabsTrigger value="all">전체</TabsTrigger>
@@ -303,25 +355,26 @@ export default function DashboardPage() {
                         <TabsTrigger value="rc">RC</TabsTrigger>
                     </TabsList>
 
-                    {/* 1. '전체' 탭. [수정] mt-4 추가 */}
+                    {/* [확인] onRowClick={handleRowClick}이 전달되고 있어야 함 */}
                     <TabsContent value="all" className="mt-4">
                         <DashboardContent
                             siteName="전체"
-                            issues={mockIssues}
+                            issues={issues}
                             onExcelExport={handleExcelExport}
+                            onRowClick={handleRowClick}
                         />
                     </TabsContent>
 
-                    {/* 2. '여수1' 탭. [수정] mt-4 추가 */}
                     <TabsContent value="yeosu1" className="mt-4">
                         <DashboardContent
                             siteName="여수1"
-                            issues={mockIssues}
+                            issues={issues}
                             onExcelExport={handleExcelExport}
+                            onRowClick={handleRowClick}
                         />
                     </TabsContent>
 
-                    {/* 3. '여수2' 탭. [수정] mt-4 추가 */}
+                    {/* ... 나머지 탭 ... */}
                     <TabsContent value="yeosu2" className="mt-4">
                         <Card>
                             <CardHeader>
@@ -333,7 +386,6 @@ export default function DashboardPage() {
                         </Card>
                     </TabsContent>
 
-                    {/* 4. '여수3' 탭. [수정] mt-4 추가 */}
                     <TabsContent value="yeosu3" className="mt-4">
                         <Card>
                             <CardHeader>
@@ -345,7 +397,6 @@ export default function DashboardPage() {
                         </Card>
                     </TabsContent>
 
-                    {/* 5. '여수4' 탭. [수정] mt-4 추가 */}
                     <TabsContent value="yeosu4" className="mt-4">
                         <Card>
                             <CardHeader>
@@ -357,7 +408,6 @@ export default function DashboardPage() {
                         </Card>
                     </TabsContent>
 
-                    {/* 6. 'RC' 탭. [수정] mt-4 추가 */}
                     <TabsContent value="rc" className="mt-4">
                         <Card>
                             <CardHeader>
@@ -370,6 +420,18 @@ export default function DashboardPage() {
                     </TabsContent>
                 </Tabs>
             </div>
+
+            {/* [확인] 모달 렌더링 로직이 있어야 함 */}
+            {selectedIssue && (
+                <IssueDetailModal
+                    issue={selectedIssue}
+                    open={!!selectedIssue}
+                    onOpenChange={(open) => {
+                        if (!open) setSelectedIssue(null)
+                    }}
+                    onUpdatePlan={handleUpdatePlan}
+                />
+            )}
         </div>
     )
 }
